@@ -54,7 +54,10 @@ class PartitionerFacade {
     }
 
     if (!context.partition.input_partition_filename.empty()) {
-      setupVcycleRefinement(hypergraph, context);
+      LOG << "Reading input partition from file " << context.partition.input_partition_filename;
+      std::vector<PartitionID> input_partition;
+      io::readPartitionFile(context.partition.input_partition_filename, input_partition);
+      setupVcycleRefinement(hypergraph, input_partition, context);
     }
 
     const auto time_and_iteration = performPartitioning(hypergraph, context);
@@ -71,13 +74,40 @@ class PartitionerFacade {
     }
   }
 
+  void improve(Hypergraph& hypergraph, const std::vector<PartitionID>& input_partition, const uint32_t num_vcycles, Context& context) {
+    io::printBanner(context);
+
+    sanityCheck(hypergraph, context);
+
+    Randomize::instance().setSeed(context.partition.seed);
+
+    if (!context.partition.fixed_vertex_filename.empty()) {
+      io::readFixedVertexFile(hypergraph, context.partition.fixed_vertex_filename);
+    }
+    // disable here to supress logging
+    context.preprocessing.enable_min_hash_sparsifier = false;
+    context.partition.global_search_iterations = num_vcycles;
+    setupVcycleRefinement(hypergraph, input_partition, context);
+    const auto time_and_iteration = performPartitioning(hypergraph, context);
+    const std::chrono::duration<double> elapsed_seconds = time_and_iteration.first;
+    const size_t iteration = time_and_iteration.second;
+
+    io::printFinalPartitioningResults(hypergraph, context, elapsed_seconds);
+    if (context.partition.write_partition_file) {
+      io::writePartitionFile(hypergraph, context.partition.graph_partition_filename);
+    }
+
+    if (context.partition.sp_process_output) {
+      io::serializer::serialize(context, hypergraph, elapsed_seconds, iteration);
+    }
+  }
+
  private:
-  void setupVcycleRefinement(Hypergraph& hypergraph, Context& context) {
+
+  void setupVcycleRefinement(Hypergraph& hypergraph, const std::vector<PartitionID>& input_partition, Context& context) {
     // We perform direct k-way V-cycle refinements.
     context.partition.vcycle_refinement_for_input_partition = true;
 
-    std::vector<PartitionID> input_partition;
-    io::readPartitionFile(context.partition.input_partition_filename, input_partition);
     ASSERT(*std::max_element(input_partition.begin(), input_partition.end()) ==
            context.partition.k - 1);
     ASSERT(input_partition.size() == hypergraph.initialNumNodes());

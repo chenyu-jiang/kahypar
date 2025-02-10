@@ -44,6 +44,13 @@ void partition(kahypar::Hypergraph& hypergraph,
   kahypar::PartitionerFacade().partition(hypergraph, context);
 }
 
+void improve(kahypar::Hypergraph& hypergraph,
+             const std::vector<kahypar::PartitionID>& input_partition,
+             const uint32_t num_vcycles,
+             kahypar::Context& context) {
+  kahypar::PartitionerFacade().improve(hypergraph, input_partition, num_vcycles, context);
+}
+
 namespace bind {
   using kahypar::Hypergraph;
   using kahypar::HypernodeID;
@@ -227,6 +234,11 @@ If only one type of weights is required, the other argument has to be an empty l
       "partition", &partition,
       "Compute a k-way partition of the hypergraph",
       py::arg("hypergraph"), py::arg("context"));
+
+  m.def(
+      "improve", &improve,
+      "Improve an existing partition of the hypergraph",
+      py::arg("hypergraph"), py::arg("input_partition"), py::arg("num_vcycles"), py::arg("context"));
 
   m.def(
       "cut", &kahypar::metrics::hyperedgeCut,
